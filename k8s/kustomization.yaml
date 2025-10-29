@@ -11,4 +11,4 @@ namespace: default
 # This is the key: Kustomize will rewrite the image tag here.
 images:
   - name: jilopezv/mdo-posts
-    newTag: REPLACEME
+    newTag: e3f3f1d
