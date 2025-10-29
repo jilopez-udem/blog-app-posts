@@ -1,0 +1,14 @@
+# k8s/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# If you have separate files, list them both. If you have one file (e.g., blog.yaml), list that one.
+resources:
+  - blog-app-argo.yaml
+
+namespace: default
+
+# This is the key: Kustomize will rewrite the image tag here.
+images:
+  - name: jilopezv/mdo-posts
+    newTag: REPLACEME
