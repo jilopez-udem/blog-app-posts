@@ -15,7 +15,7 @@ collection = db['posts']
 
 @app.route('/', methods=['GET'])
 def hello_world():
-    return jsonify('Hello World, deployed from Argo!')
+    return jsonify('Hello World, last gestión de la configuración class!')
 
 
 @app.route('/posts', methods=['GET'])
