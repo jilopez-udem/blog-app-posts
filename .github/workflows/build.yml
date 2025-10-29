@@ -1,21 +1,60 @@
-
 name: Build and Test App
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+
+permissions:
+  contents: write   # needed to push the kustomization.yaml change
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: Login to Docker Hub
-      id: login
-      run: docker login -u ${{ secrets.DOCKER_USER  }} -p ${{ secrets.DOCKER_PASSWORD }}
-    - name: Build the Docker image
-      id: build
-      run: docker build . --file Dockerfile --tag ${{ secrets.DOCKER_USER  }}/mdo-posts:latest
-    - name: Push the Docker image
-      id: push
-      run: docker push ${{ secrets.DOCKER_USER  }}/mdo-posts:latest
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # so we can push back to main
+
+      - name: Login to Docker Hub
+        run: docker login -u "${{ secrets.DOCKER_USER }}" -p "${{ secrets.DOCKER_PASSWORD }}"
+
+      - name: Build image (SHA + latest)
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        run: |
+          TAG=$(git rev-parse --short "$GITHUB_SHA")
+          docker build -f Dockerfile -t "$DOCKER_USER/mdo-posts:$TAG" -t "$DOCKER_USER/mdo-posts:latest" .
+
+      - name: Push images
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        run: |
+          TAG=$(git rev-parse --short "$GITHUB_SHA")
+          docker push "$DOCKER_USER/mdo-posts:$TAG"
+          docker push "$DOCKER_USER/mdo-posts:latest"
+
+      # --- GitOps step: bump kustomize tag and push back to repo ---
+      - name: Update kustomize image tag and push
+        env:
+          GIT_EMAIL: github-actions@users.noreply.github.com
+          GIT_NAME: github-actions
+        run: |
+          TAG=$(git rev-parse --short "$GITHUB_SHA")
+
+          # Update the 'newTag:' value in k8s/kustomization.yaml
+          # This assumes there's a single 'newTag:' (for jilopezv/mdo-posts)
+          sed -i.bak "s/^\\([[:space:]]*newTag:[[:space:]]*\\).*/\\1${TAG}/" k8s/kustomization.yaml
+          rm -f k8s/kustomization.yaml.bak
+
+          # Commit & push back to main
+          git config user.email "$GIT_EMAIL"
+          git config user.name "$GIT_NAME"
+          git add k8s/kustomization.yaml
+          # If nothing changed, skip commit to avoid failing the job
+          git diff --cached --quiet || git commit -m "chore: bump image tag to ${TAG}"
+          # Make sure we're pushing to the same branch that triggered the workflow
+          CURRENT_BRANCH="${GITHUB_REF##*/}"
+          git pull --rebase origin "$CURRENT_BRANCH"
+          git push origin "$CURRENT_BRANCH"
